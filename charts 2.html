@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Year Allocation Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <!-- New Library to Read Excel Files (.xlsx) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        .chart-container { position: relative; height: 400px; width: 100%; }
+        .drop-zone { border: 2px dashed #cbd5e1; transition: all 0.3s ease; }
+        .drop-zone:hover, .drop-zone.dragover { border-color: #3b82f6; background-color: #eff6ff; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-white shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 py-5 sm:px-6 lg:px-8 flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                <i class="fa-solid fa-chart-pie text-blue-600"></i>
+                Allocation Analytics
+            </h1>
+            <p class="text-sm text-gray-500">Upload CSV or XLSX file to visualize</p>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow container mx-auto px-4 py-8">
+        
+        <!-- File Upload Section -->
+        <div id="uploadSection" class="max-w-xl mx-auto mt-10">
+            <div class="bg-white rounded-xl shadow-lg p-8 text-center">
+                <div class="drop-zone rounded-lg p-10 cursor-pointer" id="dropZone">
+                    <input type="file" id="fileInput" accept=".csv, .xlsx" class="hidden" />
+                    <i class="fa-solid fa-cloud-arrow-up text-5xl text-blue-400 mb-4"></i>
+                    <h3 class="text-lg font-semibold text-gray-700">Upload Allocation Sheet</h3>
+                    <p class="text-gray-500 text-sm mt-2">Drag & drop your CSV or XLSX file here or click to browse</p>
+                    <button onclick="document.getElementById('fileInput').click()" class="mt-6 px-6 py-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition shadow-md">
+                        Select File
+                    </button>
+                </div>
+                <p class="text-xs text-gray-400 mt-4">Supports: .csv and .xlsx files (Sheet1 will be used)</p>
+            </div>
+        </div>
+
+        <!-- Dashboard (Hidden initially) -->
+        <div id="dashboard" class="hidden space-y-8">
+            
+            <!-- Message Box for Errors -->
+            <div id="messageBox" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+                <strong class="font-bold">Error:</strong>
+                <span id="errorMessage" class="block sm:inline"></span>
+            </div>
+
+            <!-- Key Metrics -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-blue-500">
+                    <h3 class="text-gray-500 text-sm font-medium uppercase">Total Students</h3>
+                    <p class="text-3xl font-bold text-gray-900 mt-2" id="totalCount">-</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-green-500">
+                    <h3 class="text-gray-500 text-sm font-medium uppercase">Good in Sports</h3>
+                    <p class="text-3xl font-bold text-gray-900 mt-2" id="sportsCount">-</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-purple-500">
+                    <h3 class="text-gray-500 text-sm font-medium uppercase">Total Ashirats</h3>
+                    <p class="text-3xl font-bold text-gray-900 mt-2" id="ashiratCount">-</p>
+                </div>
+            </div>
+
+            <!-- Chart Row 1: Class Allocation -->
+            <div class="bg-white p-6 rounded-xl shadow-md">
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-800">Students by Class per New Ashirat</h2>
+                        <p class="text-sm text-gray-500">Distribution of Darajah allocations within each Ashirat</p>
+                    </div>
+                    <button onclick="downloadChart('classChart')" class="text-sm text-blue-600 hover:text-blue-800 font-medium">
+                        <i class="fa-solid fa-download mr-1"></i> Download PNG
+                    </button>
+                </div>
+                <div class="chart-container">
+                    <canvas id="classChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Chart Row 2: Sports & Distribution -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Sports Chart -->
+                <div class="bg-white p-6 rounded-xl shadow-md">
+                    <div class="flex justify-between items-center mb-6">
+                        <div>
+                            <h2 class="text-lg font-bold text-gray-800">Sports Proficiency</h2>
+                            <p class="text-sm text-gray-500">Students marked "GOOD IN SPORTS"</p>
+                        </div>
+                        <button onclick="downloadChart('sportsChart')" class="text-sm text-blue-600 hover:text-blue-800 font-medium">
+                            <i class="fa-solid fa-download mr-1"></i> PNG
+                        </button>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="sportsChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Pie Chart -->
+                <div class="bg-white p-6 rounded-xl shadow-md">
+                    <div class="flex justify-between items-center mb-6">
+                        <div>
+                            <h2 class="text-lg font-bold text-gray-800">Ashirat Size Comparison</h2>
+                            <p class="text-sm text-gray-500">Total student volume per location</p>
+                        </div>
+                        <button onclick="downloadChart('ashiratChart')" class="text-sm text-blue-600 hover:text-blue-800 font-medium">
+                            <i class="fa-solid fa-download mr-1"></i> PNG
+                        </button>
+                    </div>
+                    <div class="chart-container flex justify-center">
+                        <canvas id="ashiratChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Old vs New Movement -->
+            <div class="bg-white p-6 rounded-xl shadow-md">
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-800">Migration: Old to New Ashirat</h2>
+                        <p class="text-sm text-gray-500">Where did the students come from?</p>
+                    </div>
+                    <button onclick="downloadChart('movementChart')" class="text-sm text-blue-600 hover:text-blue-800 font-medium">
+                        <i class="fa-solid fa-download mr-1"></i> Download PNG
+                    </button>
+                </div>
+                <div class="chart-container">
+                    <canvas id="movementChart"></canvas>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        // Global utility to show error messages
+        function showMessage(message) {
+            document.getElementById('errorMessage').innerText = message;
+            document.getElementById('messageBox').classList.remove('hidden');
+            setTimeout(() => {
+                document.getElementById('messageBox').classList.add('hidden');
+            }, 5000);
+        }
+
+        // Setup Drag and Drop
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => dropZone.classList.add('dragover'), false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'), false);
+        });
+
+        dropZone.addEventListener('drop', handleDrop, false);
+        fileInput.addEventListener('change', handleFiles, false);
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            handleFiles({ target: { files: files } });
+        }
+
+        function handleFiles(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const fileName = file.name.toLowerCase();
+            if (fileName.endsWith('.csv')) {
+                // Handle CSV using PapaParse
+                Papa.parse(file, {
+                    header: true,
+                    skipEmptyLines: true,
+                    complete: function(results) {
+                        processData(results.data);
+                    },
+                    error: function(err) {
+                        showMessage('Failed to parse CSV file: ' + err.message);
+                    }
+                });
+            } else if (fileName.endsWith('.xlsx')) {
+                // Handle XLSX using readExcelFile
+                readExcelFile(file).then(data => {
+                    if (data) {
+                        processData(data);
+                    }
+                }).catch(error => {
+                    showMessage('Failed to read Excel file: ' + error.message);
+                });
+            } else {
+                showMessage('Unsupported file type. Please upload a .csv or .xlsx file.');
+            }
+        }
+
+        function readExcelFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        
+                        // We assume the desired data is on the first sheet ("Sheet1")
+                        const sheetName = workbook.SheetNames[0]; 
+                        const worksheet = workbook.Sheets[sheetName];
+
+                        if (!worksheet) {
+                            reject(new Error("Could not find Sheet1 in the Excel file."));
+                            return;
+                        }
+
+                        // Convert sheet to array of objects (JSON)
+                        const json_data = XLSX.utils.sheet_to_json(worksheet);
+                        resolve(json_data);
+
+                    } catch (error) {
+                        reject(error);
+                    }
+                };
+                reader.onerror = reject;
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        function processData(data) {
+            // Check if data is empty or malformed
+            if (!data || data.length === 0 || !Object.keys(data[0]).length) {
+                showMessage('The selected file is empty or missing expected headers.');
+                return;
+            }
+
+            // 1. Normalize Keys (Trim spaces)
+            const cleanData = data.map(row => {
+                const newRow = {};
+                Object.keys(row).forEach(key => {
+                    // Convert all keys to string and trim spaces
+                    const cleanKey = String(key).trim();
+                    // Keep values as they are, but handle potential null/undefined
+                    newRow[cleanKey] = row[key] === undefined || row[key] === null ? '' : String(row[key]).trim();
+                });
+                return newRow;
+            });
+
+            // 2. Aggregations
+            const ashiratStats = {}; // { Ashirat: { total: 0, sports: 0, classes: { ClassA: 5, ClassB: 2 } } }
+            const movementStats = {}; // { NewAshirat: { OldAshiratA: 5, ... } }
+            let totalStudents = 0;
+            let totalSports = 0;
+
+            cleanData.forEach(row => {
+                const ashirat = row['New Ashirat'];
+                const oldAshirat = row['OLD Ashirat'];
+                const darajah = row['Darajah'];
+                const type = row['type'] || "";
+
+                if (!ashirat || !darajah) return; // Skip invalid rows
+
+                totalStudents++;
+                const isSports = type.toLowerCase().includes('sports');
+                if (isSports) totalSports++;
+
+                // Init Ashirat Stats
+                if (!ashiratStats[ashirat]) {
+                    ashiratStats[ashirat] = { total: 0, sports: 0, classes: {} };
+                }
+                ashiratStats[ashirat].total++;
+                if (isSports) ashiratStats[ashirat].sports++;
+
+                // Class Stats
+                if (!ashiratStats[ashirat].classes[darajah]) {
+                    ashiratStats[ashirat].classes[darajah] = 0;
+                }
+                ashiratStats[ashirat].classes[darajah]++;
+
+                // Movement Stats
+                if(oldAshirat) {
+                    if(!movementStats[ashirat]) movementStats[ashirat] = {};
+                    if(!movementStats[ashirat][oldAshirat]) movementStats[ashirat][oldAshirat] = 0;
+                    movementStats[ashirat][oldAshirat]++;
+                }
+            });
+
+            // Update UI Metrics
+            document.getElementById('totalCount').innerText = totalStudents;
+            document.getElementById('sportsCount').innerText = totalSports;
+            document.getElementById('ashiratCount').innerText = Object.keys(ashiratStats).length;
+
+            // 3. Prepare Chart Data
+            const ashiratLabels = Object.keys(ashiratStats);
+            
+            // --- Stacked Bar: Classes ---
+            // Get all unique classes
+            const allClasses = new Set();
+            cleanData.forEach(r => r['Darajah'] ? allClasses.add(r['Darajah']) : null);
+            const classLabels = Array.from(allClasses);
+
+            const classDatasets = classLabels.map((cls, index) => {
+                return {
+                    label: cls,
+                    data: ashiratLabels.map(ash => ashiratStats[ash].classes[cls] || 0),
+                    backgroundColor: getColor(index),
+                };
+            });
+
+            renderChart('classChart', 'bar', {
+                labels: ashiratLabels,
+                datasets: classDatasets
+            }, {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { x: { stacked: true }, y: { stacked: true } },
+                plugins: { legend: { position: 'top' } }
+            });
+
+            // --- Bar: Sports ---
+            const sportsData = ashiratLabels.map(ash => ashiratStats[ash].sports);
+            renderChart('sportsChart', 'bar', {
+                labels: ashiratLabels,
+                datasets: [{
+                    label: 'Students Good in Sports',
+                    data: sportsData,
+                    backgroundColor: 'rgba(34, 197, 94, 0.7)', // Green
+                    borderColor: 'rgba(34, 197, 94, 1)',
+                    borderWidth: 1
+                }]
+            }, {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } }
+            });
+
+            // --- Doughnut: Total Distribution ---
+            const totalData = ashiratLabels.map(ash => ashiratStats[ash].total);
+            renderChart('ashiratChart', 'doughnut', {
+                labels: ashiratLabels,
+                datasets: [{
+                    data: totalData,
+                    backgroundColor: ashiratLabels.map((_, i) => getColor(i, true)),
+                }]
+            }, {
+                responsive: true,
+                maintainAspectRatio: false,
+            });
+
+            // --- Stacked Bar: Old vs New ---
+            const allOldAshirats = new Set();
+            cleanData.forEach(r => r['OLD Ashirat'] ? allOldAshirats.add(r['OLD Ashirat']) : null);
+            const oldAshiratLabels = Array.from(allOldAshirats);
+
+            const movementDatasets = oldAshiratLabels.map((old, index) => {
+                return {
+                    label: old,
+                    data: ashiratLabels.map(ash => movementStats[ash] ? (movementStats[ash][old] || 0) : 0),
+                    backgroundColor: getPastelColor(index),
+                };
+            });
+
+            renderChart('movementChart', 'bar', {
+                labels: ashiratLabels,
+                datasets: movementDatasets
+            }, {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { x: { stacked: true }, y: { stacked: true } },
+                plugins: { legend: { position: 'top' } }
+            });
+
+            // Show dashboard and hide upload section
+            document.getElementById('uploadSection').classList.add('hidden');
+            document.getElementById('dashboard').classList.remove('hidden');
+        }
+
+        let chartInstances = {};
+
+        function renderChart(id, type, data, options) {
+            const ctx = document.getElementById(id).getContext('2d');
+            if (chartInstances[id]) {
+                chartInstances[id].destroy();
+            }
+            chartInstances[id] = new Chart(ctx, {
+                type: type,
+                data: data,
+                options: options
+            });
+        }
+
+        // Download Functionality
+        window.downloadChart = function(canvasId) {
+            const canvas = document.getElementById(canvasId);
+            const link = document.createElement('a');
+            link.download = canvasId + '-visual.png';
+            link.href = canvas.toDataURL();
+            link.click();
+        }
+
+        // Color Utilities
+        function getColor(index, pastel = false) {
+            const colors = [
+                '#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6', 
+                '#ec4899', '#06b6d4', '#f97316', '#6366f1', '#84cc16'
+            ];
+            return colors[index % colors.length];
+        }
+
+        function getPastelColor(index) {
+            const colors = [
+                '#93c5fd', '#fca5a5', '#fcd34d', '#86efac', '#c4b5fd', 
+                '#f9a8d4', '#67e8f9', '#fdba74', '#a5b4fc', '#bef264'
+            ];
+            return colors[index % colors.length];
+        }
+
+    </script>
+</body>
+</html>
